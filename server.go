@@ -12,21 +12,26 @@ import (
 )
 
 type Server struct {
-	ips []*url.URL
+	backends []*url.URL
 }
 
 type requestHandler struct {
 	server Server
 }
 
-func Setup(ips []string) Server {
+func Setup(backends []string) Server {
+	// Create slice to hold valid urls
 	urls := make([]*url.URL, 0)
-	for _, ip := range ips {
-		url, err := url.Parse(ip)
+
+	for _, backend := range backends {
+		// Attempt to parse the backend url
+		url, err := url.Parse(backend)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Printf("Invalid backend url: %s\n", backend)
+			fmt.Printf("Error: %s", err)
 			os.Exit(1)
 		}
+
 		urls = append(urls, url)
 	}
 
@@ -44,15 +49,19 @@ func (handler requestHandler) ServeHTTP(w http.ResponseWriter, req *http.Request
 	var body bytes.Buffer
 	body.ReadFrom(req.Body)
 
-	for _, ip := range handler.server.ips {
-		go sendRequest(ip, req, body)
+	for _, backend := range handler.server.backends {
+		// For each backend, pass the request on
+		go sendRequest(backend, req, body)
 	}
 }
 
-func sendRequest(ip *url.URL, r *http.Request, body bytes.Buffer) {
+func sendRequest(backend *url.URL, r *http.Request, body bytes.Buffer) {
+	// Clone the request with an empty context
 	req := r.WithContext(context.TODO())
+
+	// Add back the body, and set the new request url as the current backend
 	req.Body = ioutil.NopCloser(bytes.NewReader(body.Bytes()))
-	req.URL = ip
+	req.URL = backend
 	req.URL.Path = r.URL.String()
 	req.RequestURI = ""
 
